@@ -52,6 +52,9 @@ pub enum ContractError {
 
     #[error("Caller is not admin")]
     NotAdmin {},
+
+    #[error("Contract is not allowed: {contract}")]
+    NoContractAllowed { contract: String },
 }
 
 impl From<FromUtf8Error> for ContractError {

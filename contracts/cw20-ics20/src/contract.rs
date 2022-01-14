@@ -123,9 +123,13 @@ pub fn execute_receive(
     nonpayable(&info)?;
 
     let msg: TransferMsg = from_binary(&wrapper.msg)?;
-    let contract = CONTRACTS_INFO.load(deps.storage, info.sender.to_string())?;
+    let cw20_contract = info.sender.to_string();
+    let contract = CONTRACTS_INFO
+        .may_load(deps.storage, cw20_contract.clone())?
+        .ok_or(ContractError::NoContractAllowed { contract: cw20_contract.clone() })?;
+
     let amount = Amount::Cw20(Cw20Coin {
-        address: info.sender.to_string(),
+        address: cw20_contract,
         amount: wrapper.amount,
         denom: contract.denom,
     });
@@ -364,6 +368,33 @@ mod test {
     }
 
     #[test]
+    fn register_cw20() {
+        let mut deps = setup(&["channel-3", "channel-7"]);
+        let cw20_addr = "my-token".to_string();
+        let info = mock_info("anyone2", &[]);
+        let err = execute_register_cw20(
+            deps.as_mut(),
+            info,
+            cw20_addr.clone(),
+            "denom".to_string(),
+        ).unwrap_err();
+        assert_eq!(err, ContractError::NotAdmin {});
+
+        let info = mock_info("anyone", &[]);
+        let res = execute_register_cw20(
+            deps.as_mut(),
+            info,
+            cw20_addr.clone(),
+            "denom".to_string(),
+        ).unwrap();
+        assert_eq!(0, res.messages.len());
+
+        let data = query(deps.as_ref(), mock_env(), QueryMsg::HasContract {address: cw20_addr}).unwrap();
+        let res: HasContractResponse = from_binary(&data).unwrap();
+        assert_eq!(true, res.registered);
+    }
+
+    #[test]
     fn proper_checks_on_execute_cw20() {
         let send_channel = "channel-15";
         let mut deps = setup(&["channel-3", send_channel]);
@@ -380,8 +411,12 @@ mod test {
             msg: to_binary(&transfer).unwrap(),
         });
 
-        // works with proper funds
+        // contract no registered
         let info = mock_info(cw20_addr, &[]);
+        let err = execute(deps.as_mut(), mock_env(), info, msg.clone()).unwrap_err();
+        assert_eq!(err, ContractError::NoContractAllowed {contract: cw20_addr.to_string()});
+
+        // register cw20
         execute_register_cw20(
             deps.as_mut(),
             mock_info("anyone", &[]),
@@ -389,6 +424,8 @@ mod test {
             "denom".to_string(),
         )
         .unwrap();
+        // works with proper funds
+        let info = mock_info(cw20_addr, &[]);
         let res = execute(deps.as_mut(), mock_env(), info, msg.clone()).unwrap();
         assert_eq!(1, res.messages.len());
         if let CosmosMsg::Ibc(IbcMsg::SendPacket {
