@@ -1,21 +1,21 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    from_binary, to_binary, Addr, Binary, Deps, DepsMut, Env, IbcMsg, IbcQuery, MessageInfo, Order,
-    PortIdResponse, Response, StdResult,
+    attr, from_binary, to_binary, Addr, Binary, Deps, DepsMut, Env, IbcMsg, IbcQuery, MessageInfo,
+    Order, PortIdResponse, Response, StdResult,
 };
 
 use cw2::{get_contract_version, set_contract_version};
-use cw20::{Cw20Coin, Cw20ReceiveMsg};
+use cw20::Cw20ReceiveMsg;
 
-use crate::amount::Amount;
+use crate::amount::{Amount, Cw20Coin};
 use crate::error::ContractError;
 use crate::ibc::Ics20Packet;
 use crate::msg::{
-    ChannelResponse, ExecuteMsg, InitMsg, ListChannelsResponse, MigrateMsg, PortResponse, QueryMsg,
-    TransferMsg,
+    AdminResponse, ChannelResponse, ExecuteMsg, HasContractResponse, InitMsg, ListChannelsResponse,
+    MigrateMsg, PortResponse, QueryMsg, TransferMsg,
 };
-use crate::state::{Config, CHANNEL_INFO, CHANNEL_STATE, CONFIG};
+use crate::state::{Config, ContractInfo, CHANNEL_INFO, CHANNEL_STATE, CONFIG, CONTRACTS_INFO};
 use cw_utils::{nonpayable, one_coin};
 
 // version info for migration info
@@ -26,11 +26,12 @@ const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub fn instantiate(
     deps: DepsMut,
     _env: Env,
-    _info: MessageInfo,
+    info: MessageInfo,
     msg: InitMsg,
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
     let cfg = Config {
+        admin: info.sender.to_string(),
         default_timeout: msg.default_timeout,
     };
     CONFIG.save(deps.storage, &cfg)?;
@@ -44,13 +45,73 @@ pub fn execute(
     info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
+    let api = deps.api;
     match msg {
+        ExecuteMsg::UpdateAdmin { admin } => execute_update_admin(
+            deps,
+            info,
+            admin.map(|admin| api.addr_validate(&admin)).transpose()?,
+        ),
+        ExecuteMsg::RegisterCw20 { contract, denom } => {
+            execute_register_cw20(deps, info, contract, denom)
+        }
         ExecuteMsg::Receive(msg) => execute_receive(deps, env, info, msg),
         ExecuteMsg::Transfer(msg) => {
             let coin = one_coin(&info)?;
             execute_transfer(deps, env, msg, Amount::Native(coin), info.sender)
         }
     }
+}
+
+pub fn execute_update_admin(
+    deps: DepsMut,
+    info: MessageInfo,
+    new_admin: Option<Addr>,
+) -> Result<Response, ContractError> {
+    let config = CONFIG.load(deps.storage)?;
+    if config.admin != info.sender {
+        return Err(ContractError::NotAdmin {});
+    }
+
+    let admin_str = match new_admin.as_ref() {
+        Some(admin) => admin.to_string(),
+        None => "None".to_string(),
+    };
+    CONFIG.update(deps.storage, |mut c| -> StdResult<_> {
+        c.admin = admin_str.clone();
+        Ok(c)
+    })?;
+
+    let attributes = vec![
+        attr("action", "update_admin"),
+        attr("admin", admin_str),
+        attr("sender", info.sender),
+    ];
+
+    Ok(Response::new().add_attributes(attributes))
+}
+
+pub fn execute_register_cw20(
+    deps: DepsMut,
+    info: MessageInfo,
+    contract: String,
+    denom: String,
+) -> Result<Response, ContractError> {
+    let config = CONFIG.load(deps.storage)?;
+    if config.admin != info.sender {
+        return Err(ContractError::NotAdmin {});
+    }
+
+    let data = ContractInfo { denom };
+    CONTRACTS_INFO.save(deps.storage, contract.clone(), &data)?;
+
+    let attributes = vec![
+        attr("action", "register_cw20"),
+        attr("cw20_contract", contract),
+        attr("denom", data.denom),
+    ];
+
+    Ok(Response::new().add_attributes(attributes))
 }
 
 pub fn execute_receive(
@@ -62,9 +123,11 @@ pub fn execute_receive(
     nonpayable(&info)?;
 
     let msg: TransferMsg = from_binary(&wrapper.msg)?;
+    let contract = CONTRACTS_INFO.load(deps.storage, info.sender.to_string())?;
     let amount = Amount::Cw20(Cw20Coin {
         address: info.sender.to_string(),
         amount: wrapper.amount,
+        denom: contract.denom,
     });
     let api = deps.api;
     execute_transfer(deps, env, msg, amount, api.addr_validate(&wrapper.sender)?)
@@ -138,10 +201,24 @@ pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, C
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
+        QueryMsg::Admin {} => to_binary(&query_admin(deps)?),
+        QueryMsg::HasContract { address } => to_binary(&query_has_contract(deps, address)?),
         QueryMsg::Port {} => to_binary(&query_port(deps)?),
         QueryMsg::ListChannels {} => to_binary(&query_list(deps)?),
         QueryMsg::Channel { id } => to_binary(&query_channel(deps, id)?),
     }
+}
+
+fn query_admin(deps: Deps) -> StdResult<AdminResponse> {
+    let config = CONFIG.load(deps.storage)?;
+    Ok(AdminResponse {
+        admin: config.admin,
+    })
+}
+
+fn query_has_contract(deps: Deps, address: String) -> StdResult<HasContractResponse> {
+    let registered = CONTRACTS_INFO.has(deps.storage, address);
+    Ok(HasContractResponse { registered })
 }
 
 fn query_port(deps: Deps) -> StdResult<PortResponse> {
@@ -305,6 +382,13 @@ mod test {
 
         // works with proper funds
         let info = mock_info(cw20_addr, &[]);
+        execute_register_cw20(
+            deps.as_mut(),
+            mock_info("anyone", &[]),
+            cw20_addr.to_string(),
+            "denom".to_string(),
+        )
+        .unwrap();
         let res = execute(deps.as_mut(), mock_env(), info, msg.clone()).unwrap();
         assert_eq!(1, res.messages.len());
         if let CosmosMsg::Ibc(IbcMsg::SendPacket {

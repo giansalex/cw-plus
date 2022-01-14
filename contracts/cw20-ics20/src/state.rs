@@ -11,6 +11,12 @@ pub const CHANNEL_INFO: Map<&str, ChannelInfo> = Map::new("channel_info");
 
 // indexed by (channel_id, denom) maintaining the balance of the channel in that currency
 pub const CHANNEL_STATE: Map<(&str, &str), ChannelState> = Map::new("channel_state");
+pub const CONTRACTS_INFO: Map<String, ContractInfo> = Map::new("contracts_info");
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug, Default)]
+pub struct ContractInfo {
+    pub denom: String,
+}
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug, Default)]
 pub struct ChannelState {
@@ -20,6 +26,7 @@ pub struct ChannelState {
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug, Default)]
 pub struct Config {
+    pub admin: String,
     pub default_timeout: u64,
 }
 

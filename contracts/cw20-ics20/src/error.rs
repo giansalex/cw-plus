@@ -49,6 +49,9 @@ pub enum ContractError {
 
     #[error("Got a submessage reply with unknown id: {id}")]
     UnknownReplyId { id: u64 },
+
+    #[error("Caller is not admin")]
+    NotAdmin {},
 }
 
 impl From<FromUtf8Error> for ContractError {

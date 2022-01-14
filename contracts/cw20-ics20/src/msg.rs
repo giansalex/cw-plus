@@ -18,6 +18,10 @@ pub struct MigrateMsg {}
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
+    /// Change the admin
+    UpdateAdmin { admin: Option<String> },
+    /// Register a cw20 contract
+    RegisterCw20 { contract: String, denom: String },
     /// This accepts a properly-encoded ReceiveMsg from a cw20 contract
     Receive(Cw20ReceiveMsg),
     /// This allows us to transfer *exactly one* native token
@@ -40,6 +44,10 @@ pub struct TransferMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
+    /// Return AdminResponse
+    Admin {},
+    /// Return HasContractResponse
+    HasContract { address: String },
     /// Return the port ID bound by this contract. Returns PortResponse
     Port {},
     /// Show all channels we have connected to. Return type is ListChannelsResponse.
@@ -68,4 +76,14 @@ pub struct ChannelResponse {
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 pub struct PortResponse {
     pub port_id: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub struct AdminResponse {
+    pub admin: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub struct HasContractResponse {
+    pub registered: bool,
 }

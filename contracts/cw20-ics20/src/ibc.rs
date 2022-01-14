@@ -468,7 +468,7 @@ mod test {
         let mut deps = setup(&["channel-1", "channel-7", send_channel]);
 
         let cw20_addr = "token-addr";
-        let cw20_denom = "cw20:token-addr";
+        let cw20_denom = "cw20:token-addr:denom";
 
         // prepare some mock packets
         let sent_packet = mock_sent_packet(send_channel, 987654321, cw20_denom, "local-sender");
@@ -491,8 +491,14 @@ mod test {
 
         // query channel state|_|
         let state = query_channel(deps.as_ref(), send_channel.to_string()).unwrap();
-        assert_eq!(state.balances, vec![Amount::cw20(987654321, cw20_addr)]);
-        assert_eq!(state.total_sent, vec![Amount::cw20(987654321, cw20_addr)]);
+        assert_eq!(
+            state.balances,
+            vec![Amount::cw20(987654321, cw20_addr, "denom")]
+        );
+        assert_eq!(
+            state.total_sent,
+            vec![Amount::cw20(987654321, cw20_addr, "denom")]
+        );
 
         // cannot receive more than we sent
         let msg = IbcPacketReceiveMsg::new(recv_high_packet);
@@ -514,8 +520,14 @@ mod test {
 
         // query channel state
         let state = query_channel(deps.as_ref(), send_channel.to_string()).unwrap();
-        assert_eq!(state.balances, vec![Amount::cw20(111111111, cw20_addr)]);
-        assert_eq!(state.total_sent, vec![Amount::cw20(987654321, cw20_addr)]);
+        assert_eq!(
+            state.balances,
+            vec![Amount::cw20(111111111, cw20_addr, "denom")]
+        );
+        assert_eq!(
+            state.total_sent,
+            vec![Amount::cw20(987654321, cw20_addr, "denom")]
+        );
     }
 
     #[test]
