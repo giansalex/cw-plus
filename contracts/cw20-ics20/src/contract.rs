@@ -396,6 +396,27 @@ mod test {
     }
 
     #[test]
+    fn update_admin() {
+        let mut deps = setup(&["channel-3", "channel-7"]);
+
+        let info = mock_info("anyone2", &[]);
+        let err = execute_update_admin(deps.as_mut(), info, None).unwrap_err();
+        assert_eq!(err, ContractError::NotAdmin {});
+
+        let info = mock_info("anyone", &[]);
+        let res = execute_update_admin(deps.as_mut(), info, None).unwrap();
+        assert_eq!(0, res.messages.len());
+
+        let info = mock_info("anyone", &[]);
+        let err = execute_update_admin(deps.as_mut(), info, None).unwrap_err();
+        assert_eq!(err, ContractError::NotAdmin {});
+
+        let data = query(deps.as_ref(), mock_env(), QueryMsg::Admin {}).unwrap();
+        let res: AdminResponse = from_binary(&data).unwrap();
+        assert_eq!("None", res.admin);
+    }
+
+    #[test]
     fn register_cw20() {
         let mut deps = setup(&["channel-3", "channel-7"]);
         let cw20_addr = "my-token".to_string();
