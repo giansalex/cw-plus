@@ -21,7 +21,6 @@ pub enum Amount {
 }
 
 impl Amount {
-    // TODO: write test for this
     pub fn from_parts(denom: String, amount: Uint128) -> Self {
         if denom.starts_with("cw20:") {
             let parts: Vec<&str> = denom.splitn(3, ':').collect();
@@ -78,5 +77,26 @@ impl Amount {
             Amount::Native(c) => c.amount.is_zero(),
             Amount::Cw20(c) => c.amount.is_zero(),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use cosmwasm_std::Uint128;
+    use crate::amount::Amount;
+
+    #[test]
+    fn parse_amount() {
+        // native denom
+        let res = Amount::from_parts("ucosm".to_string(), 1u8.into());
+
+        assert_eq!("ucosm", res.denom());
+        assert_eq!(Uint128::new(1), res.amount());
+
+        // cw20 token
+        let res = Amount::from_parts("cw20:my-token:denom".to_string(), 1u8.into());
+
+        assert_eq!("cw20:my-token:denom", res.denom());
+        assert_eq!(Uint128::new(1), res.amount());
     }
 }

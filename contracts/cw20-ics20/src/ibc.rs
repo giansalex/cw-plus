@@ -147,11 +147,13 @@ fn enforce_order_and_version(
 pub fn ibc_channel_close(
     _deps: DepsMut,
     _env: Env,
-    _channel: IbcChannelCloseMsg,
+    channel: IbcChannelCloseMsg,
 ) -> Result<IbcBasicResponse, ContractError> {
-    // TODO: what to do here?
-    // we will have locked funds that need to be returned somehow
-    unimplemented!();
+    match channel {
+        IbcChannelCloseMsg::CloseConfirm {..} => Ok(IbcBasicResponse::new()),
+        IbcChannelCloseMsg::CloseInit {..} => Err(ContractError::CannotClose {}),
+        _ => panic!(),
+    }
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -258,7 +260,6 @@ pub fn ibc_packet_ack(
     _env: Env,
     msg: IbcPacketAckMsg,
 ) -> Result<IbcBasicResponse, ContractError> {
-    // TODO: trap error like in receive?
     let ics20msg: Ics20Ack = from_binary(&msg.acknowledgement.data)?;
     match ics20msg {
         Ics20Ack::Result(_) => on_packet_success(deps, msg.original_packet),
@@ -273,7 +274,6 @@ pub fn ibc_packet_timeout(
     _env: Env,
     msg: IbcPacketTimeoutMsg,
 ) -> Result<IbcBasicResponse, ContractError> {
-    // TODO: trap error like in receive?
     let packet = msg.packet;
     on_packet_failure(deps, packet, "timeout".to_string())
 }
@@ -385,8 +385,8 @@ mod test {
         // Example message generated from the SDK
         let expected = r#"{"amount":"12345","denom":"ucosm","receiver":"wasm1fucynrfkrt684pm8jrt8la5h2csvs5cnldcgqc","sender":"cosmos1zedxv25ah8fksmg2lzrndrpkvsjqgk4zt5ff7n"}"#;
 
-        let encdoded = String::from_utf8(to_vec(&packet).unwrap()).unwrap();
-        assert_eq!(expected, encdoded.as_str());
+        let encoded = String::from_utf8(to_vec(&packet).unwrap()).unwrap();
+        assert_eq!(expected, encoded.as_str());
     }
 
     fn cw20_payment(amount: u128, address: &str, recipient: &str) -> SubMsg {
