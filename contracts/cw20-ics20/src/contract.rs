@@ -7,13 +7,14 @@ use cosmwasm_std::{
 
 use cw2::{get_contract_version, set_contract_version};
 use cw20::Cw20ReceiveMsg;
+use cw_storage_plus::Bound;
 
 use crate::amount::{Amount, Cw20Coin};
 use crate::error::ContractError;
 use crate::ibc::Ics20Packet;
 use crate::msg::{
-    AdminResponse, ChannelResponse, ExecuteMsg, HasContractResponse, InitMsg, ListChannelsResponse,
-    MigrateMsg, PortResponse, QueryMsg, TransferMsg,
+    AdminResponse, AllContractsResponse, ChannelResponse, ExecuteMsg, HasContractResponse, InitMsg,
+    ListChannelsResponse, MigrateMsg, PortResponse, QueryMsg, TransferMsg,
 };
 use crate::state::{Config, ContractInfo, CHANNEL_INFO, CHANNEL_STATE, CONFIG, CONTRACTS_INFO};
 use cw_utils::{nonpayable, one_coin};
@@ -21,6 +22,10 @@ use cw_utils::{nonpayable, one_coin};
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:cw20-ics20";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+// settings for pagination
+const MAX_LIMIT: u32 = 30;
+const DEFAULT_LIMIT: u32 = 10;
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
@@ -209,6 +214,9 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::Admin {} => to_binary(&query_admin(deps)?),
         QueryMsg::HasContract { address } => to_binary(&query_has_contract(deps, address)?),
+        QueryMsg::AllContracts { start_after, limit } => {
+            to_binary(&query_all_contracts(deps, start_after, limit)?)
+        }
         QueryMsg::Port {} => to_binary(&query_port(deps)?),
         QueryMsg::ListChannels {} => to_binary(&query_list(deps)?),
         QueryMsg::Channel { id } => to_binary(&query_channel(deps, id)?),
@@ -226,6 +234,23 @@ fn query_has_contract(deps: Deps, address: String) -> StdResult<HasContractRespo
     let cw20_addr = deps.api.addr_validate(&address)?;
     let registered = CONTRACTS_INFO.has(deps.storage, &cw20_addr);
     Ok(HasContractResponse { registered })
+}
+
+pub fn query_all_contracts(
+    deps: Deps,
+    start_after: Option<String>,
+    limit: Option<u32>,
+) -> StdResult<AllContractsResponse> {
+    let limit = limit.unwrap_or(DEFAULT_LIMIT).min(MAX_LIMIT) as usize;
+    let start = start_after.map(Bound::exclusive);
+
+    let contracts = CONTRACTS_INFO
+        .keys(deps.storage, start, None, Order::Ascending)
+        .take(limit)
+        .map(|item| item.map(Into::into))
+        .collect::<StdResult<_>>()?;
+
+    Ok(AllContractsResponse { contracts })
 }
 
 fn query_port(deps: Deps) -> StdResult<PortResponse> {
@@ -389,11 +414,26 @@ mod test {
         let data = query(
             deps.as_ref(),
             mock_env(),
-            QueryMsg::HasContract { address: cw20_addr },
+            QueryMsg::HasContract {
+                address: cw20_addr.clone(),
+            },
         )
         .unwrap();
         let res: HasContractResponse = from_binary(&data).unwrap();
         assert_eq!(true, res.registered);
+
+        let data = query(
+            deps.as_ref(),
+            mock_env(),
+            QueryMsg::AllContracts {
+                start_after: None,
+                limit: Some(10),
+            },
+        )
+        .unwrap();
+        let res: AllContractsResponse = from_binary(&data).unwrap();
+        assert_eq!(1, res.contracts.len());
+        assert_eq!(cw20_addr, res.contracts[0]);
     }
 
     #[test]

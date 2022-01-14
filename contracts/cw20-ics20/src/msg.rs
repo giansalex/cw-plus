@@ -48,6 +48,12 @@ pub enum QueryMsg {
     Admin {},
     /// Return HasContractResponse
     HasContract { address: String },
+    /// Returns all registered cw20 contracts. Supports pagination.
+    /// Return type: AllContractsResponse.
+    AllContracts {
+        start_after: Option<String>,
+        limit: Option<u32>,
+    },
     /// Return the port ID bound by this contract. Returns PortResponse
     Port {},
     /// Show all channels we have connected to. Return type is ListChannelsResponse.
@@ -86,4 +92,9 @@ pub struct AdminResponse {
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 pub struct HasContractResponse {
     pub registered: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub struct AllContractsResponse {
+    pub contracts: Vec<String>,
 }
