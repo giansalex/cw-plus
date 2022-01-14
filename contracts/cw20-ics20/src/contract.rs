@@ -318,7 +318,7 @@ mod test {
             assert_eq!(channel_id.as_str(), send_channel);
             let msg: Ics20Packet = from_binary(data).unwrap();
             assert_eq!(msg.amount, Uint128::new(888777666));
-            assert_eq!(msg.denom, format!("cw20:{}", cw20_addr));
+            assert_eq!(msg.denom, format!("cw20:{}:denom", cw20_addr));
             assert_eq!(msg.sender.as_str(), "my-account");
             assert_eq!(msg.receiver.as_str(), "foreign-address");
         } else {

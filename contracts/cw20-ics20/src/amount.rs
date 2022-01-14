@@ -3,8 +3,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::ContractError;
 use cosmwasm_std::{Coin, Uint128};
-use cw20::Cw20Coin;
 use std::convert::TryInto;
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub struct Cw20Coin {
+    pub address: String,
+    pub amount: Uint128,
+    pub denom: String,
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -18,17 +24,24 @@ impl Amount {
     // TODO: write test for this
     pub fn from_parts(denom: String, amount: Uint128) -> Self {
         if denom.starts_with("cw20:") {
-            let address = denom.get(5..).unwrap().into();
-            Amount::Cw20(Cw20Coin { address, amount })
+            let parts: Vec<&str> = denom.splitn(3, ':').collect();
+            let address = parts[1].to_string();
+            let denom = parts[2].to_string();
+            Amount::Cw20(Cw20Coin {
+                address,
+                amount,
+                denom,
+            })
         } else {
             Amount::Native(Coin { denom, amount })
         }
     }
 
-    pub fn cw20(amount: u128, addr: &str) -> Self {
+    pub fn cw20(amount: u128, addr: &str, denom: &str) -> Self {
         Amount::Cw20(Cw20Coin {
             address: addr.into(),
             amount: Uint128::new(amount),
+            denom: denom.into(),
         })
     }
 
@@ -44,7 +57,7 @@ impl Amount {
     pub fn denom(&self) -> String {
         match self {
             Amount::Native(c) => c.denom.clone(),
-            Amount::Cw20(c) => format!("cw20:{}", c.address.as_str()),
+            Amount::Cw20(c) => format!("cw20:{}:{}", c.address.as_str(), c.denom.as_str()),
         }
     }
 
