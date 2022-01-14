@@ -102,12 +102,13 @@ pub fn execute_register_cw20(
         return Err(ContractError::NotAdmin {});
     }
 
+    let cw20_addr = deps.api.addr_validate(&contract)?;
     let data = ContractInfo { denom };
-    CONTRACTS_INFO.save(deps.storage, contract.clone(), &data)?;
+    CONTRACTS_INFO.save(deps.storage, &cw20_addr, &data)?;
 
     let attributes = vec![
         attr("action", "register_cw20"),
-        attr("cw20_contract", contract),
+        attr("cw20_contract", cw20_addr),
         attr("denom", data.denom),
     ];
 
@@ -123,13 +124,15 @@ pub fn execute_receive(
     nonpayable(&info)?;
 
     let msg: TransferMsg = from_binary(&wrapper.msg)?;
-    let cw20_contract = info.sender.to_string();
+    let cw20_contract = info.sender;
     let contract = CONTRACTS_INFO
-        .may_load(deps.storage, cw20_contract.clone())?
-        .ok_or(ContractError::NoContractAllowed { contract: cw20_contract.clone() })?;
+        .may_load(deps.storage, &cw20_contract)?
+        .ok_or(ContractError::NoContractAllowed {
+            contract: cw20_contract.clone().into(),
+        })?;
 
     let amount = Amount::Cw20(Cw20Coin {
-        address: cw20_contract,
+        address: cw20_contract.into(),
         amount: wrapper.amount,
         denom: contract.denom,
     });
@@ -220,7 +223,8 @@ fn query_admin(deps: Deps) -> StdResult<AdminResponse> {
 }
 
 fn query_has_contract(deps: Deps, address: String) -> StdResult<HasContractResponse> {
-    let registered = CONTRACTS_INFO.has(deps.storage, address);
+    let cw20_addr = deps.api.addr_validate(&address)?;
+    let registered = CONTRACTS_INFO.has(deps.storage, &cw20_addr);
     Ok(HasContractResponse { registered })
 }
 
@@ -371,24 +375,23 @@ mod test {
         let mut deps = setup(&["channel-3", "channel-7"]);
         let cw20_addr = "my-token".to_string();
         let info = mock_info("anyone2", &[]);
-        let err = execute_register_cw20(
-            deps.as_mut(),
-            info,
-            cw20_addr.clone(),
-            "denom".to_string(),
-        ).unwrap_err();
+        let err =
+            execute_register_cw20(deps.as_mut(), info, cw20_addr.clone(), "denom".to_string())
+                .unwrap_err();
         assert_eq!(err, ContractError::NotAdmin {});
 
         let info = mock_info("anyone", &[]);
-        let res = execute_register_cw20(
-            deps.as_mut(),
-            info,
-            cw20_addr.clone(),
-            "denom".to_string(),
-        ).unwrap();
+        let res =
+            execute_register_cw20(deps.as_mut(), info, cw20_addr.clone(), "denom".to_string())
+                .unwrap();
         assert_eq!(0, res.messages.len());
 
-        let data = query(deps.as_ref(), mock_env(), QueryMsg::HasContract {address: cw20_addr}).unwrap();
+        let data = query(
+            deps.as_ref(),
+            mock_env(),
+            QueryMsg::HasContract { address: cw20_addr },
+        )
+        .unwrap();
         let res: HasContractResponse = from_binary(&data).unwrap();
         assert_eq!(true, res.registered);
     }
@@ -413,7 +416,12 @@ mod test {
         // contract no registered
         let info = mock_info(cw20_addr, &[]);
         let err = execute(deps.as_mut(), mock_env(), info, msg.clone()).unwrap_err();
-        assert_eq!(err, ContractError::NoContractAllowed {contract: cw20_addr.to_string()});
+        assert_eq!(
+            err,
+            ContractError::NoContractAllowed {
+                contract: cw20_addr.to_string()
+            }
+        );
 
         // register cw20
         execute_register_cw20(

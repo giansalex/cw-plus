@@ -82,8 +82,8 @@ impl Amount {
 
 #[cfg(test)]
 mod test {
-    use cosmwasm_std::Uint128;
     use crate::amount::Amount;
+    use cosmwasm_std::Uint128;
 
     #[test]
     fn parse_amount() {

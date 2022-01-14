@@ -1,7 +1,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use cosmwasm_std::{IbcEndpoint, Uint128};
+use cosmwasm_std::{Addr, IbcEndpoint, Uint128};
 use cw_storage_plus::{Item, Map};
 
 pub const CONFIG: Item<Config> = Item::new("ics20_config");
@@ -11,7 +11,7 @@ pub const CHANNEL_INFO: Map<&str, ChannelInfo> = Map::new("channel_info");
 
 // indexed by (channel_id, denom) maintaining the balance of the channel in that currency
 pub const CHANNEL_STATE: Map<(&str, &str), ChannelState> = Map::new("channel_state");
-pub const CONTRACTS_INFO: Map<String, ContractInfo> = Map::new("contracts_info");
+pub const CONTRACTS_INFO: Map<&Addr, ContractInfo> = Map::new("contracts_info");
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug, Default)]
 pub struct ContractInfo {

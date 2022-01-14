@@ -150,8 +150,8 @@ pub fn ibc_channel_close(
     channel: IbcChannelCloseMsg,
 ) -> Result<IbcBasicResponse, ContractError> {
     match channel {
-        IbcChannelCloseMsg::CloseConfirm {..} => Ok(IbcBasicResponse::new()),
-        IbcChannelCloseMsg::CloseInit {..} => Err(ContractError::CannotClose {}),
+        IbcChannelCloseMsg::CloseConfirm { .. } => Ok(IbcBasicResponse::new()),
+        IbcChannelCloseMsg::CloseInit { .. } => Err(ContractError::CannotClose {}),
         _ => panic!(),
     }
 }
